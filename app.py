@@ -16,7 +16,8 @@ RESULT_SHEET_FILE = os.path.join(BASE_DIR, 'result sheet.html')
 # Read from environment MONGO_URI (e.g. for Vercel) or fall back to connection string
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://achark659_db_user:1piWy4zdcuk7EWjA@cluster0.qqxk8gr.mongodb.net/")
 try:
-    mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    # Set tlsAllowInvalidCertificates=True to bypass local SSL/TLS certificate scanning errors
+    mongo_client = MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=5000)
     db_mongo = mongo_client["srms_db"]
     records_collection = db_mongo["student_records"]
 except Exception as e:
