@@ -12,6 +12,30 @@ ADMIN_LOGIN_FILE = os.path.join(BASE_DIR, 'admin login.html')
 ADMIN_PANEL_FILE = os.path.join(BASE_DIR, 'admin panel.html')
 RESULT_SHEET_FILE = os.path.join(BASE_DIR, 'result sheet.html')
 
+def get_local_db_path():
+    # If running in a read-only environment like Vercel, write local fallback to /tmp
+    path = os.path.join(BASE_DIR, 'database.json')
+    try:
+        # Check if we can write to the base directory
+        test_file = os.path.join(BASE_DIR, '.write_test')
+        with open(test_file, 'w') as f:
+            pass
+        os.remove(test_file)
+    except Exception:
+        # Fall back to Vercel's writable /tmp directory
+        path = '/tmp/database.json'
+        
+        # If the file doesn't exist in /tmp, copy the default database.json from BASE_DIR if it exists
+        if not os.path.exists(path):
+            orig_path = os.path.join(BASE_DIR, 'database.json')
+            if os.path.exists(orig_path):
+                try:
+                    import shutil
+                    shutil.copyfile(orig_path, path)
+                except Exception:
+                    pass
+    return path
+
 # MongoDB Connection Initialization
 # Read from environment MONGO_URI (e.g. for Vercel) or fall back to connection string
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://achark659_db:achark659_db@cluster0.qqxk8gr.mongodb.net/")
@@ -65,7 +89,7 @@ def load_db():
             print(f"MongoDB Load failed, falling back to local file: {e}")
 
     # 2. Fallback to local database.json file
-    LOCAL_DB = os.path.join(BASE_DIR, 'database.json')
+    LOCAL_DB = get_local_db_path()
     if os.path.exists(LOCAL_DB):
         try:
             with open(LOCAL_DB, 'r', encoding='utf-8') as f:
@@ -137,7 +161,7 @@ def save_record():
             
     # 2. Fallback to local database.json file
     try:
-        LOCAL_DB = os.path.join(BASE_DIR, 'database.json')
+        LOCAL_DB = get_local_db_path()
         local_db_data = {}
         if os.path.exists(LOCAL_DB):
             with open(LOCAL_DB, 'r', encoding='utf-8') as f:
@@ -178,7 +202,7 @@ def delete_record(usn):
             
     # 2. Fallback to local database.json file
     try:
-        LOCAL_DB = os.path.join(BASE_DIR, 'database.json')
+        LOCAL_DB = get_local_db_path()
         if os.path.exists(LOCAL_DB):
             with open(LOCAL_DB, 'r', encoding='utf-8') as f:
                 local_db_data = json.load(f)
