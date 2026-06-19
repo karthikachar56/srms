@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template_string, redirect, url_for
 import json
 import os
+import requests
 from pymongo import MongoClient
 
 app = Flask(__name__)
@@ -11,6 +12,8 @@ INDEX_FILE = os.path.join(BASE_DIR, 'index.html')
 ADMIN_LOGIN_FILE = os.path.join(BASE_DIR, 'admin login.html')
 ADMIN_PANEL_FILE = os.path.join(BASE_DIR, 'admin panel.html')
 RESULT_SHEET_FILE = os.path.join(BASE_DIR, 'result sheet.html')
+
+DB_SERVER_URL = "http://127.0.0.1:5001/api/records"
 
 def get_local_db_path():
     # If running on Vercel or in a read-only environment, write local fallback to /tmp
@@ -56,7 +59,15 @@ def load_db():
         }
     }
     
-    # 1. Try loading from MongoDB Collection
+    # 1. Try loading from internal DB server
+    try:
+        response = requests.get(DB_SERVER_URL, timeout=3)
+        if response.status_code == 200:
+            return response.json()
+    except Exception as e:
+        print(f"Internal DB server load failed, falling back: {e}")
+    
+    # 2. Try loading from MongoDB Collection
     if records_collection is not None:
         try:
             cursor = records_collection.find({})
@@ -81,7 +92,7 @@ def load_db():
         except Exception as e:
             print(f"MongoDB Load failed, falling back to local file: {e}")
 
-    # 2. Fallback to local database.json file
+    # 3. Fallback to local database.json file
     LOCAL_DB = get_local_db_path()
     if os.path.exists(LOCAL_DB):
         try:
@@ -140,7 +151,24 @@ def save_record():
         for sub, val in marks.items():
             clean_marks[sub] = int(val)
             
-    # 1. Try saving to MongoDB Collection
+    # 1. Try saving to internal DB server
+    try:
+        response = requests.post(DB_SERVER_URL, json={
+            "usn": usn_clean,
+            "name": name,
+            "marks": clean_marks
+        }, timeout=3)
+        if response.status_code == 200:
+            res_data = response.json()
+            if res_data.get("success"):
+                return jsonify({
+                    "success": True,
+                    "message": f"Record for {usn_clean} updated successfully via internal DB server!"
+                })
+    except Exception as e:
+        print(f"Internal DB server save failed, falling back: {e}")
+            
+    # 2. Try saving to MongoDB Collection
     if records_collection is not None:
         try:
             records_collection.update_one(
@@ -152,7 +180,7 @@ def save_record():
         except Exception as e:
             print(f"MongoDB save failed, falling back to local file: {e}")
             
-    # 2. Fallback to local database.json file
+    # 3. Fallback to local database.json file
     try:
         LOCAL_DB = get_local_db_path()
         local_db_data = {}
@@ -170,12 +198,12 @@ def save_record():
             
         return jsonify({
             "success": True,
-            "message": f"Record for {usn_clean} saved successfully locally (Fallback: MongoDB is offline/unreachable)."
+            "message": f"Record for {usn_clean} saved successfully locally (Fallback: MongoDB and DB Server are offline/unreachable)."
         })
     except Exception as file_err:
         return jsonify({
             "success": False,
-            "message": f"Failed to save record: MongoDB is unreachable AND local file save failed. Details: {str(file_err)}"
+            "message": f"Failed to save record: DB Server & MongoDB are unreachable AND local file save failed. Details: {str(file_err)}"
         }), 500
 
 # 5. API Route to delete student records
@@ -183,7 +211,20 @@ def save_record():
 def delete_record(usn):
     usn_clean = usn.strip().upper()
     
-    # 1. Try deleting from MongoDB Collection
+    # 1. Try deleting from internal DB server
+    try:
+        response = requests.delete(f"{DB_SERVER_URL}/{usn_clean}", timeout=3)
+        if response.status_code == 200:
+            res_data = response.json()
+            if res_data.get("success"):
+                return jsonify({
+                    "success": True,
+                    "message": f"Record {usn_clean} deleted via internal DB server."
+                })
+    except Exception as e:
+        print(f"Internal DB server delete failed, falling back: {e}")
+        
+    # 2. Try deleting from MongoDB Collection
     if records_collection is not None:
         try:
             result = records_collection.delete_one({"_id": usn_clean})
@@ -193,7 +234,7 @@ def delete_record(usn):
         except Exception as e:
             print(f"MongoDB delete failed, falling back to local file: {e}")
             
-    # 2. Fallback to local database.json file
+    # 3. Fallback to local database.json file
     try:
         LOCAL_DB = get_local_db_path()
         if os.path.exists(LOCAL_DB):
@@ -205,11 +246,11 @@ def delete_record(usn):
                 with open(LOCAL_DB, 'w', encoding='utf-8') as f:
                     json.dump(local_db_data, f, indent=4)
                 return jsonify({"success": True, "message": f"Record {usn_clean} deleted locally."})
-        return jsonify({"success": False, "message": "Record not found locally or on MongoDB."}), 404
+        return jsonify({"success": False, "message": "Record not found locally, on MongoDB, or on DB Server."}), 404
     except Exception as file_err:
         return jsonify({
             "success": False,
-            "message": f"Failed to delete record: MongoDB failed AND local file delete failed. Details: {str(file_err)}"
+            "message": f"Failed to delete record: DB Server & MongoDB failed AND local file delete failed. Details: {str(file_err)}"
         }), 500
 
 # 6. API Route for Secure Admin Login
