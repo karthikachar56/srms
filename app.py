@@ -13,16 +13,8 @@ ADMIN_PANEL_FILE = os.path.join(BASE_DIR, 'admin panel.html')
 RESULT_SHEET_FILE = os.path.join(BASE_DIR, 'result sheet.html')
 
 def get_local_db_path():
-    # If running in a read-only environment like Vercel, write local fallback to /tmp
-    path = os.path.join(BASE_DIR, 'database.json')
-    try:
-        # Check if we can write to the base directory
-        test_file = os.path.join(BASE_DIR, '.write_test')
-        with open(test_file, 'w') as f:
-            pass
-        os.remove(test_file)
-    except Exception:
-        # Fall back to Vercel's writable /tmp directory
+    # If running on Vercel or in a read-only environment, write local fallback to /tmp
+    if os.environ.get("VERCEL") or not os.access(BASE_DIR, os.W_OK):
         path = '/tmp/database.json'
         
         # If the file doesn't exist in /tmp, copy the default database.json from BASE_DIR if it exists
@@ -34,7 +26,8 @@ def get_local_db_path():
                     shutil.copyfile(orig_path, path)
                 except Exception:
                     pass
-    return path
+        return path
+    return os.path.join(BASE_DIR, 'database.json')
 
 # MongoDB Connection Initialization
 # Read from environment MONGO_URI (e.g. for Vercel) or fall back to connection string
