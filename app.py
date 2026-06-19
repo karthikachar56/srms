@@ -1,61 +1,69 @@
 from flask import Flask, request, jsonify, render_template_string, redirect, url_for
 import json
 import os
+from pymongo import MongoClient
 
 app = Flask(__name__)
 
-# Serverless path resolution
+# Serverless path resolution for static assets
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_FILE = os.path.join(BASE_DIR, 'database.json')
 INDEX_FILE = os.path.join(BASE_DIR, 'index.html')
 ADMIN_LOGIN_FILE = os.path.join(BASE_DIR, 'admin login.html')
 ADMIN_PANEL_FILE = os.path.join(BASE_DIR, 'admin panel.html')
 RESULT_SHEET_FILE = os.path.join(BASE_DIR, 'result sheet.html')
 
+# MongoDB Connection Initialization
+# Read from environment MONGO_URI (e.g. for Vercel) or fall back to connection string
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://achark659_db_user:1piWy4zdcuk7EWjA@cluster0.qqxk8gr.mongodb.net/")
+try:
+    mongo_client = MongoClient(MONGO_URI, serverSelectionTimeoutMS=5000)
+    db_mongo = mongo_client["srms_db"]
+    records_collection = db_mongo["student_records"]
+except Exception as e:
+    print(f"MongoDB connection failed to initialize: {e}")
+    records_collection = None
+
 # Helper function to load database
 def load_db():
-    if not os.path.exists(DB_FILE):
-        # Initialize default record matching your original HTML
-        default_data = {
-            "1SP25CS001": {
-                "name": "Karthik D",
-                "marks": {
-                    "Mathematics": 88,
-                    "Data Structures": 92,
-                    "OOPs (Java)": 85,
-                    "Computer Arch.": 79,
-                    "Basic Electrical": 90
-                }
+    default_data = {
+        "1SP25CS001": {
+            "name": "Karthik D",
+            "marks": {
+                "Mathematics": 88,
+                "Data Structures": 92,
+                "OOPs (Java)": 85,
+                "Computer Arch.": 79,
+                "Basic Electrical": 90
             }
         }
-        try:
-            with open(DB_FILE, 'w', encoding='utf-8') as f:
-                json.dump(default_data, f, indent=4)
-        except Exception as e:
-            # Fallback to returning default data if write fails (e.g. read-only filesystem on Vercel)
-            return default_data
+    }
+    
+    if records_collection is None:
+        return default_data
+        
     try:
-        with open(DB_FILE, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except Exception:
-        # Emergency fallback database if reading fails or file is corrupted
-        return {
-            "1SP25CS001": {
-                "name": "Karthik D",
-                "marks": {
-                    "Mathematics": 88,
-                    "Data Structures": 92,
-                    "OOPs (Java)": 85,
-                    "Computer Arch.": 79,
-                    "Basic Electrical": 90
-                }
+        cursor = records_collection.find({})
+        db_data = {}
+        for doc in cursor:
+            usn = doc["_id"]
+            db_data[usn] = {
+                "name": doc["name"],
+                "marks": doc["marks"]
             }
-        }
-
-# Helper function to save database
-def save_db(data):
-    with open(DB_FILE, 'w', encoding='utf-8') as f:
-        json.dump(data, f, indent=4)
+        
+        # If collection is empty, seed it with the default record
+        if not db_data:
+            records_collection.insert_one({
+                "_id": "1SP25CS001",
+                "name": "Karthik D",
+                "marks": default_data["1SP25CS001"]["marks"]
+            })
+            return default_data
+            
+        return db_data
+    except Exception as e:
+        print(f"MongoDB Load Error: {e}")
+        return default_data
 
 # 1. Routes to serve Main Pages
 @app.route('/')
@@ -99,36 +107,48 @@ def save_record():
     if not usn or not name:
         return jsonify({"success": False, "message": "USN and Name are required fields."}), 400
         
-    db = load_db()
-    db[usn] = {
-        "name": name,
-        "marks": marks
-    }
+    usn_clean = usn.strip().upper()
     
+    if records_collection is None:
+        return jsonify({"success": False, "message": "Database connection is uninitialized."}), 500
+        
     try:
-        save_db(db)
-        return jsonify({"success": True, "message": f"Record for {usn} updated successfully!"})
+        # Convert mark values to integers to guarantee metrics safety
+        clean_marks = {}
+        if marks:
+            for sub, val in marks.items():
+                clean_marks[sub] = int(val)
+                
+        records_collection.update_one(
+            {"_id": usn_clean},
+            {"$set": {"name": name, "marks": clean_marks}},
+            upsert=True
+        )
+        return jsonify({"success": True, "message": f"Record for {usn_clean} updated successfully in MongoDB!"})
     except Exception as e:
         return jsonify({
             "success": False, 
-            "message": f"Database is read-only (Vercel Serverless environment). Local updates are not persistent. Error: {str(e)}"
+            "message": f"Failed to save record to MongoDB. Error: {str(e)}"
         }), 500
 
 # 5. API Route to delete student records
 @app.route('/api/records/<usn>', methods=['DELETE'])
 def delete_record(usn):
-    db = load_db()
-    if usn in db:
-        del db[usn]
-        try:
-            save_db(db)
-            return jsonify({"success": True, "message": f"Record {usn} deleted."})
-        except Exception as e:
-            return jsonify({
-                "success": False, 
-                "message": f"Database is read-only (Vercel Serverless environment). Deletion failed. Error: {str(e)}"
-            }), 500
-    return jsonify({"success": False, "message": "Record not found."}), 404
+    usn_clean = usn.strip().upper()
+    
+    if records_collection is None:
+        return jsonify({"success": False, "message": "Database connection is uninitialized."}), 500
+        
+    try:
+        result = records_collection.delete_one({"_id": usn_clean})
+        if result.deleted_count > 0:
+            return jsonify({"success": True, "message": f"Record {usn_clean} deleted from MongoDB."})
+        return jsonify({"success": False, "message": "Record not found."}), 404
+    except Exception as e:
+        return jsonify({
+            "success": False, 
+            "message": f"Failed to delete record from MongoDB. Error: {str(e)}"
+        }), 500
 
 # 6. API Route for Secure Admin Login
 @app.route('/api/admin/login', methods=['POST'])
