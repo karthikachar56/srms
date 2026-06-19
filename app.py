@@ -1,7 +1,6 @@
 from flask import Flask, request, jsonify, render_template_string, redirect, url_for
 import json
 import os
-import requests
 from pymongo import MongoClient
 
 app = Flask(__name__)
@@ -13,27 +12,7 @@ ADMIN_LOGIN_FILE = os.path.join(BASE_DIR, 'admin login.html')
 ADMIN_PANEL_FILE = os.path.join(BASE_DIR, 'admin panel.html')
 RESULT_SHEET_FILE = os.path.join(BASE_DIR, 'result sheet.html')
 
-DB_SERVER_URL = "http://127.0.0.1:5001/api/records"
-
-def get_local_db_path():
-    # If running on Vercel or in a read-only environment, write local fallback to /tmp
-    if os.environ.get("VERCEL") or not os.access(BASE_DIR, os.W_OK):
-        path = '/tmp/database.json'
-        
-        # If the file doesn't exist in /tmp, copy the default database.json from BASE_DIR if it exists
-        if not os.path.exists(path):
-            orig_path = os.path.join(BASE_DIR, 'database.json')
-            if os.path.exists(orig_path):
-                try:
-                    import shutil
-                    shutil.copyfile(orig_path, path)
-                except Exception:
-                    pass
-        return path
-    return os.path.join(BASE_DIR, 'database.json')
-
 # MongoDB Connection Initialization
-# Read from environment MONGO_URI (e.g. for Vercel) or fall back to connection string
 MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://achark659_db:achark659_db@cluster0.qqxk8gr.mongodb.net/")
 try:
     # Set tlsAllowInvalidCertificates=True to bypass local SSL/TLS certificate scanning errors
@@ -44,10 +23,24 @@ except Exception as e:
     print(f"MongoDB connection failed to initialize: {e}")
     records_collection = None
 
-# Helper function to load database
+# Helper function to load database from MongoDB
 def load_db():
-    default_data = {
-        "1SP25CS001": {
+    if records_collection is None:
+        raise Exception("MongoDB not initialized")
+        
+    cursor = records_collection.find({})
+    db_data = {}
+    for doc in cursor:
+        usn = doc["_id"]
+        db_data[usn] = {
+            "name": doc["name"],
+            "marks": doc["marks"]
+        }
+    
+    # Seed collection if first successful connect and it is empty
+    if not db_data:
+        default_record = {
+            "_id": "1SP25CS001",
             "name": "Karthik D",
             "marks": {
                 "Mathematics": 88,
@@ -57,51 +50,14 @@ def load_db():
                 "Basic Electrical": 90
             }
         }
-    }
-    
-    # 1. Try loading from internal DB server
-    try:
-        response = requests.get(DB_SERVER_URL, timeout=3)
-        if response.status_code == 200:
-            return response.json()
-    except Exception as e:
-        print(f"Internal DB server load failed, falling back: {e}")
-    
-    # 2. Try loading from MongoDB Collection
-    if records_collection is not None:
-        try:
-            cursor = records_collection.find({})
-            db_data = {}
-            for doc in cursor:
-                usn = doc["_id"]
-                db_data[usn] = {
-                    "name": doc["name"],
-                    "marks": doc["marks"]
-                }
-            
-            # Seed collection if first successful connect
-            if not db_data:
-                records_collection.insert_one({
-                    "_id": "1SP25CS001",
-                    "name": "Karthik D",
-                    "marks": default_data["1SP25CS001"]["marks"]
-                })
-                return default_data
-                
-            return db_data
-        except Exception as e:
-            print(f"MongoDB Load failed, falling back to local file: {e}")
+        records_collection.insert_one(default_record)
+        db_data["1SP25CS001"] = {
+            "name": default_record["name"],
+            "marks": default_record["marks"]
+        }
+        
+    return db_data
 
-    # 3. Fallback to local database.json file
-    LOCAL_DB = get_local_db_path()
-    if os.path.exists(LOCAL_DB):
-        try:
-            with open(LOCAL_DB, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as file_err:
-            print(f"Failed to read local fallback database: {file_err}")
-            
-    return default_data
 
 # 1. Routes to serve Main Pages
 @app.route('/')
@@ -128,11 +84,16 @@ def get_records():
 # 3. API Route to check if a specific USN exists in the database
 @app.route('/api/records/<usn>/exists', methods=['GET'])
 def check_student_exists(usn):
-    db = load_db()
+    if records_collection is None:
+        return jsonify({"success": False, "message": "Database not initialized"}), 500
     usn_clean = usn.strip().upper()
-    if usn_clean in db:
-        return jsonify({"exists": True, "name": db[usn_clean]["name"]})
-    return jsonify({"exists": False}), 404
+    try:
+        student = records_collection.find_one({"_id": usn_clean})
+        if student:
+            return jsonify({"exists": True, "name": student["name"]})
+        return jsonify({"exists": False}), 404
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Database error: {str(e)}"}), 500
 
 # 4. API Route to save or update student records
 @app.route('/api/records', methods=['POST'])
@@ -157,109 +118,34 @@ def save_record():
                         clean_marks[sub] = 0
                 else:
                     clean_marks[sub] = 0
-            
-            
-    # 1. Try saving to internal DB server
+                    
+    if records_collection is None:
+        return jsonify({"success": False, "message": "Database not initialized"}), 500
+        
     try:
-        response = requests.post(DB_SERVER_URL, json={
-            "usn": usn_clean,
-            "name": name,
-            "marks": clean_marks
-        }, timeout=3)
-        if response.status_code == 200:
-            res_data = response.json()
-            if res_data.get("success"):
-                return jsonify({
-                    "success": True,
-                    "message": f"Record for {usn_clean} updated successfully via internal DB server!"
-                })
+        records_collection.update_one(
+            {"_id": usn_clean},
+            {"$set": {"name": name, "marks": clean_marks}},
+            upsert=True
+        )
+        return jsonify({"success": True, "message": f"Record for {usn_clean} saved successfully!"})
     except Exception as e:
-        print(f"Internal DB server save failed, falling back: {e}")
-            
-    # 2. Try saving to MongoDB Collection
-    if records_collection is not None:
-        try:
-            records_collection.update_one(
-                {"_id": usn_clean},
-                {"$set": {"name": name, "marks": clean_marks}},
-                upsert=True
-            )
-            return jsonify({"success": True, "message": f"Record for {usn_clean} updated successfully in MongoDB!"})
-        except Exception as e:
-            print(f"MongoDB save failed, falling back to local file: {e}")
-            
-    # 3. Fallback to local database.json file
-    try:
-        LOCAL_DB = get_local_db_path()
-        local_db_data = {}
-        if os.path.exists(LOCAL_DB):
-            with open(LOCAL_DB, 'r', encoding='utf-8') as f:
-                local_db_data = json.load(f)
-        
-        local_db_data[usn_clean] = {
-            "name": name,
-            "marks": clean_marks
-        }
-        
-        with open(LOCAL_DB, 'w', encoding='utf-8') as f:
-            json.dump(local_db_data, f, indent=4)
-            
-        return jsonify({
-            "success": True,
-            "message": f"Record for {usn_clean} saved successfully locally (Fallback: MongoDB and DB Server are offline/unreachable)."
-        })
-    except Exception as file_err:
-        return jsonify({
-            "success": False,
-            "message": f"Failed to save record: DB Server & MongoDB are unreachable AND local file save failed. Details: {str(file_err)}"
-        }), 500
+        return jsonify({"success": False, "message": f"Failed to save record to MongoDB: {str(e)}"}), 500
 
 # 5. API Route to delete student records
 @app.route('/api/records/<usn>', methods=['DELETE'])
 def delete_record(usn):
     usn_clean = usn.strip().upper()
-    
-    # 1. Try deleting from internal DB server
-    try:
-        response = requests.delete(f"{DB_SERVER_URL}/{usn_clean}", timeout=3)
-        if response.status_code == 200:
-            res_data = response.json()
-            if res_data.get("success"):
-                return jsonify({
-                    "success": True,
-                    "message": f"Record {usn_clean} deleted via internal DB server."
-                })
-    except Exception as e:
-        print(f"Internal DB server delete failed, falling back: {e}")
+    if records_collection is None:
+        return jsonify({"success": False, "message": "Database not initialized"}), 500
         
-    # 2. Try deleting from MongoDB Collection
-    if records_collection is not None:
-        try:
-            result = records_collection.delete_one({"_id": usn_clean})
-            if result.deleted_count > 0:
-                return jsonify({"success": True, "message": f"Record {usn_clean} deleted from MongoDB."})
-            # If not found in MongoDB, we check if it is in the local fallback file before returning 404
-        except Exception as e:
-            print(f"MongoDB delete failed, falling back to local file: {e}")
-            
-    # 3. Fallback to local database.json file
     try:
-        LOCAL_DB = get_local_db_path()
-        if os.path.exists(LOCAL_DB):
-            with open(LOCAL_DB, 'r', encoding='utf-8') as f:
-                local_db_data = json.load(f)
-                
-            if usn_clean in local_db_data:
-                del local_db_data[usn_clean]
-                with open(LOCAL_DB, 'w', encoding='utf-8') as f:
-                    json.dump(local_db_data, f, indent=4)
-                return jsonify({"success": True, "message": f"Record {usn_clean} deleted locally."})
-        return jsonify({"success": False, "message": "Record not found locally, on MongoDB, or on DB Server."}), 404
-    except Exception as file_err:
-        return jsonify({
-            "success": False,
-            "message": f"Failed to delete record: DB Server & MongoDB failed AND local file delete failed. Details: {str(file_err)}"
-        }), 500
+        result = records_collection.delete_one({"_id": usn_clean})
+        if result.deleted_count > 0:
+            return jsonify({"success": True, "message": f"Record {usn_clean} deleted successfully from MongoDB."})
+        return jsonify({"success": False, "message": f"Record {usn_clean} not found."}), 404
+    except Exception as e:
+        return jsonify({"success": False, "message": f"Failed to delete record: {str(e)}"}), 500
 
 # 6. API Route for Secure Admin Login
 @app.route('/api/admin/login', methods=['POST'])
@@ -276,7 +162,77 @@ def admin_login_api():
 @app.route('/result')
 def result_sheet():
     usn = request.args.get('usn', '').strip().upper()
-    db = load_db()
+    try:
+        db = load_db()
+    except Exception as e:
+        return f"""
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Database Offline</title>
+            <style>
+                body {{
+                    background: linear-gradient(135deg, #f3f4f6 0%, #e5e7eb 100%);
+                    height: 100vh;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                    margin: 0;
+                }}
+                .error-card {{
+                    background: white;
+                    padding: 40px;
+                    border-radius: 12px;
+                    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+                    text-align: center;
+                    max-width: 400px;
+                    width: 90%;
+                }}
+                .icon {{
+                    font-size: 48px;
+                    color: #ef4444;
+                    margin-bottom: 20px;
+                }}
+                h2 {{
+                    color: #1f2937;
+                    margin-top: 0;
+                    margin-bottom: 10px;
+                }}
+                p {{
+                    color: #6b7280;
+                    font-size: 15px;
+                    line-height: 1.5;
+                    margin-bottom: 25px;
+                }}
+                .btn {{
+                    display: inline-block;
+                    padding: 12px 24px;
+                    background-color: #667eea;
+                    color: white;
+                    text-decoration: none;
+                    border-radius: 8px;
+                    font-weight: 600;
+                    transition: background-color 0.2s;
+                }}
+                .btn:hover {{
+                    background-color: #5a67d8;
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="error-card">
+                <div class="icon">🔌❌</div>
+                <h2>Database Offline</h2>
+                <p>Could not connect to MongoDB Atlas database. Please verify your connection configuration.</p>
+                <p style="font-size:12px; color:#ef4444; word-break:break-all;">Details: {str(e)}</p>
+                <a href="/" class="btn">Try Again</a>
+            </div>
+        </body>
+        </html>
+        """, 503
     
     if usn not in db:
         return f"""
