@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Student Marks Management</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f3f4f6;
+            padding: 30px;
+            display: flex;
+            gap: 30px;
+            min-height: 100vh;
+        }
+
+        .panel {
+            background: #ffffff;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+            height: fit-content;
+        }
+
+        .form-side {
+            width: 38%;
+            min-width: 360px;
+        }
+
+        .table-side {
+            width: 62%;
+            flex-grow: 1;
+        }
+
+        h2 {
+            margin-bottom: 25px;
+            color: #1f2937;
+            font-size: 22px;
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 12px;
+        }
+
+        .form-field {
+            margin-bottom: 18px;
+        }
+
+        .form-field label {
+            display: block;
+            font-size: 13px;
+            font-weight: 600;
+            margin-bottom: 6px;
+            color: #4b5563;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .form-field input {
+            width: 100%;
+            padding: 11px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 15px;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        .form-field input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+
+        /* Flex row for Subject Name alongside its numeric Marks input */
+        .subject-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+
+        .subject-row .sub-name {
+            flex: 2;
+        }
+
+        .subject-row .sub-mark {
+            flex: 1;
+        }
+
+        .btn-add {
+            width: 100%;
+            padding: 14px;
+            background-color: #10b981;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            margin-top: 10px;
+            transition: background-color 0.2s ease;
+        }
+
+        .btn-add:hover {
+            background-color: #059669;
+        }
+
+        /* Table Components */
+        .table-container {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+            text-align: left;
+        }
+
+        th, td {
+            padding: 14px;
+            border-bottom: 1px solid #e5e7eb;
+            vertical-align: middle;
+        }
+
+        th {
+            background-color: #f9fafb;
+            color: #374151;
+            font-weight: 600;
+        }
+
+        tr:hover {
+            background-color: #f9fafb;
+        }
+
+        .usn-badge {
+            font-weight: 700;
+            color: #1e40af;
+            background-color: #dbeafe;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        /* Delete Button Action Control */
+        .btn-delete {
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 13px;
+            transition: background-color 0.2s ease;
+        }
+
+        .btn-delete:hover {
+            background-color: #dc2626;
+        }
+
+        @media (max-width: 1100px) {
+            body {
+                flex-direction: column;
+            }
+            .form-side, .table-side {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="panel form-side">
+        <h2>Enter / Update Marks</h2>
+        
+        <form id="adminForm" onsubmit="handleFormSubmit(event)">
+            <div class="form-field">
+                <label>Student USN</label>
+                <input type="text" id="studentUsn" placeholder="e.g., 1SP25CS001" style="text-transform: uppercase;" required>
+            </div>
+            
+            <div class="form-field">
+                <label>Student Name</label>
+                <input type="text" id="studentName" placeholder="Full Name" required>
+            </div>
+
+            <div class="form-field">
+                <label>Subjects Configuration & Marks</label>
+                
+                <div class="subject-row">
+                    <input type="text" class="sub-name" id="sub1Name" value="Mathematics" placeholder="Subject 1 Name" required>
+                    <input type="number" class="sub-mark" id="sub1Mark" min="0" max="100" placeholder="Marks" required>
+                </div>
+
+                <div class="subject-row">
+                    <input type="text" class="sub-name" id="sub2Name" value="Data Structures" placeholder="Subject 2 Name" required>
+                    <input type="number" class="sub-mark" id="sub2Mark" min="0" max="100" placeholder="Marks" required>
+                </div>
+
+                <div class="subject-row">
+                    <input type="text" class="sub-name" id="sub3Name" value="OOPs (Java)" placeholder="Subject 3 Name" required>
+                    <input type="number" class="sub-mark" id="sub3Mark" min="0" max="100" placeholder="Marks" required>
+                </div>
+
+                <div class="subject-row">
+                    <input type="text" class="sub-name" id="sub4Name" value="Computer Arch." placeholder="Subject 4 Name" required>
+                    <input type="number" class="sub-mark" id="sub4Mark" min="0" max="100" placeholder="Marks" required>
+                </div>
+
+                <div class="subject-row">
+                    <input type="text" class="sub-name" id="sub5Name" value="Basic Electrical" placeholder="Subject 5 Name" required>
+                    <input type="number" class="sub-mark" id="sub5Mark" min="0" max="100" placeholder="Marks" required>
+                </div>
+            </div>
+            
+            <button type="submit" class="btn-add">Save / Update Record</button>
+        </form>
+    </div>
+
+    <div class="panel table-side">
+        <h2>Active Student Records</h2>
+        
+        <div class="table-container">
+            <table id="recordsTable">
+                <thead>
+                    <tr>
+                        <th>USN</th>
+                        <th>Student Name</th>
+                        <th>Marks Details</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr id="row-1SP25CS001">
+                        <td><span class="usn-badge">1SP25CS001</span></td>
+                        <td>Karthik D</td>
+                        <td>
+                            <small>
+                                Mathematics: <b>88</b>, Data Structures: <b>92</b>, OOPs (Java): <b>85</b>, Computer Arch.: <b>79</b>, Basic Electrical: <b>90</b>
+                            </small>
+                        </td>
+                        <td>
+                            <button class="btn-delete" onclick="deleteRecord('1SP25CS001')">Delete</button>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        // Fetch and load existing records from the Python database backend on page initialization
+        window.onload = async function() {
+            try {
+                const response = await fetch('/api/records');
+                const records = await response.json();
+                const tableBody = document.querySelector('#recordsTable tbody');
+                tableBody.innerHTML = ''; // Clear hardcoded placeholder row
+                
+                for (const usn in records) {
+                    renderTableRow(usn, records[usn].name, records[usn].marks);
+                }
+            } catch (err) {
+                console.error("Error loading records:", err);
+            }
+        }
+
+        // Helper function to build template structures dynamically in the DOM
+        function renderTableRow(usn, name, marks) {
+            const tableBody = document.querySelector('#recordsTable tbody');
+            
+            let marksSummary = [];
+            for (const [sub, mark] of Object.entries(marks)) {
+                marksSummary.push(`${sub}: <b>${mark}</b>`);
+            }
+            
+            const row = document.createElement('tr');
+            row.id = `row-${usn}`;
+            row.innerHTML = `
+                <td><span class="usn-badge">${usn}</span></td>
+                <td>
+                    <a href="/result?usn=${usn}" target="_blank" style="color: #1e40af; font-weight:600; text-decoration:none; border-bottom:1px dashed #1e40af; margin-right: 10px;">${name} ↗</a>
+                    <button class="btn-edit" onclick="loadRecordIntoForm('${usn}', '${escapeHtml(name)}', ${JSON.stringify(marks).replace(/"/g, '&quot;')})" style="background-color: #3b82f6; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 11px;">Edit</button>
+                </td>
+                <td><small>${marksSummary.join(', ')}</small></td>
+                <td><button class="btn-delete" onclick="deleteRecord('${usn}')">Delete</button></td>
+            `;
+            tableBody.appendChild(row);
+        }
+
+        // Helper to load record into form fields for quick editing
+        function loadRecordIntoForm(usn, name, marks) {
+            document.getElementById('studentUsn').value = usn;
+            document.getElementById('studentName').value = name;
+            
+            // Map marks keys to fields
+            const entries = Object.entries(marks);
+            for (let i = 1; i <= 5; i++) {
+                if (entries[i-1]) {
+                    document.getElementById(`sub${i}Name`).value = entries[i-1][0];
+                    document.getElementById(`sub${i}Mark`).value = entries[i-1][1];
+                }
+            }
+            // Scroll to form on mobile/small screens
+            document.getElementById('adminForm').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Simple HTML Escaping utility
+        function escapeHtml(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+        }
+
+        // Asynchronous Submit Handler interacting with Python API
+        async function handleFormSubmit(event) {
+            event.preventDefault();
+
+            const usn = document.getElementById('studentUsn').value.trim().toUpperCase();
+            const name = document.getElementById('studentName').value.trim();
+            
+            const marks = {
+                [document.getElementById('sub1Name').value]: parseInt(document.getElementById('sub1Mark').value),
+                [document.getElementById('sub2Name').value]: parseInt(document.getElementById('sub2Mark').value),
+                [document.getElementById('sub3Name').value]: parseInt(document.getElementById('sub3Mark').value),
+                [document.getElementById('sub4Name').value]: parseInt(document.getElementById('sub4Mark').value),
+                [document.getElementById('sub5Name').value]: parseInt(document.getElementById('sub5Mark').value)
+            };
+
+            try {
+                const response = await fetch('/api/records', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ usn, name, marks })
+                });
+
+                const result = await response.json();
+                if(result.success) {
+                    alert(result.message);
+                    location.reload();
+                } else {
+                    alert(result.message || "Failed to update record.");
+                }
+            } catch (err) {
+                alert("Error connecting to database server.");
+            }
+        }
+
+        // Dynamic API Delete command
+        async function deleteRecord(usn) {
+            if (confirm(`Are you sure you want to permanently delete the student record for USN: ${usn}?`)) {
+                try {
+                    const response = await fetch(`/api/records/${usn}`, { method: 'DELETE' });
+                    const result = await response.json();
+                    if (result.success) {
+                        const targetRow = document.getElementById(`row-${usn}`);
+                        if (targetRow) {
+                            targetRow.remove();
+                        }
+                    } else {
+                        alert(result.message || "Failed to delete record.");
+                    }
+                } catch (err) {
+                    alert("Error communicating deletion to server.");
+                }
+            }
+        }
+    </script>
+
+</body>
+</html>

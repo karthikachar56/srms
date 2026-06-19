@@ -1,0 +1,22 @@
+{
+    "1SP25CS001": {
+        "name": "Karthik D",
+        "marks": {
+            "Mathematics": 88,
+            "Data Structures": 92,
+            "OOPs (Java)": 85,
+            "Computer Arch.": 79,
+            "Basic Electrical": 90
+        }
+    },
+    "1SP25CS002": {
+        "name": "Rahul S",
+        "marks": {
+            "Mathematics": 95,
+            "Data Structures": 85,
+            "OOPs (Java)": 88,
+            "Computer Arch.": 82,
+            "Basic Electrical": 87
+        }
+    }
+}

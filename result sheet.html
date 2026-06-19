@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Semester Results</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f7fafc;
+            color: #333;
+            padding: 40px 20px;
+        }
+
+        .result-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            overflow: hidden;
+        }
+
+        .result-header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .result-header h1 {
+            font-size: 26px;
+            margin-bottom: 5px;
+        }
+
+        .student-info-bar {
+            background: #edf2f7;
+            padding: 20px 30px;
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #e2e8f0;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .info-box span {
+            display: block;
+            font-size: 13px;
+            color: #718096;
+            text-transform: uppercase;
+            font-weight: 600;
+            margin-bottom: 2px;
+        }
+
+        .info-box strong {
+            font-size: 16px;
+            color: #2d3748;
+        }
+
+        .table-container {
+            padding: 30px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            text-align: left;
+            margin-bottom: 25px;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            color: #475569;
+            font-weight: 600;
+            padding: 14px;
+            border-bottom: 2px solid #e2e8f0;
+        }
+
+        td {
+            padding: 14px;
+            border-bottom: 1px solid #edf2f7;
+            color: #4a5568;
+        }
+
+        tr:hover {
+            background-color: #f8fafc;
+        }
+
+        .summary-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+
+        .metric-group {
+            text-align: center;
+            flex: 1;
+            min-width: 100px;
+        }
+
+        .metric-label {
+            font-size: 12px;
+            color: #718096;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-bottom: 4px;
+        }
+
+        .metric-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #2d3748;
+        }
+
+        .status-pass {
+            color: #38a169;
+            background: #c6f6d5;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-weight: 700;
+            display: inline-block;
+        }
+
+        .action-footer {
+            text-align: center;
+            padding: 0 30px 30px 30px;
+        }
+
+        .btn-back {
+            display: inline-block;
+            padding: 12px 24px;
+            background-color: #e2e8f0;
+            color: #4a5568;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .btn-back:hover {
+            background-color: #cbd5e0;
+            color: #2d3748;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="result-container">
+        <div class="result-header">
+            <h1>Semester Performance Report</h1>
+            <p>Official Academic Statement</p>
+        </div>
+
+        <div class="student-info-bar">
+            <div class="info-box">
+                <span>Student Name</span>
+                <strong id="displayName">Loading...</strong>
+            </div>
+            <div class="info-box">
+                <span>USN</span>
+                <strong id="displayUsn">Loading...</strong>
+            </div>
+            <div class="info-box">
+                <span>Academic Term</span>
+                <strong>Current Semester</strong>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Subject Code</th>
+                        <th>Subject Title</th>
+                        <th>Max Marks</th>
+                        <th>Marks Obtained</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>22CSE11</td>
+                        <td>Mathematics for Computing</td>
+                        <td>100</td>
+                        <td>88</td>
+                    </tr>
+                    <tr>
+                        <td>22CSE12</td>
+                        <td>Data Structures & Algorithms</td>
+                        <td>100</td>
+                        <td>92</td>
+                    </tr>
+                    <tr>
+                        <td>22CSE13</td>
+                        <td>Object Oriented Programming</td>
+                        <td>100</td>
+                        <td>85</td>
+                    </tr>
+                    <tr>
+                        <td>22CSE14</td>
+                        <td>Computer Organization & Architecture</td>
+                        <td>100</td>
+                        <td>79</td>
+                    </tr>
+                    <tr>
+                        <td>22CSE15</td>
+                        <td>Basic Electrical & Electronics</td>
+                        <td>100</td>
+                        <td>90</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="summary-card">
+                <div class="metric-group">
+                    <div class="metric-label">Total Marks</div>
+                    <div class="metric-value">434 / 500</div>
+                </div>
+                <div class="metric-group">
+                    <div class="metric-label">Percentage</div>
+                    <div class="metric-value">86.8%</div>
+                </div>
+                <div class="metric-group">
+                    <div class="metric-label">Result Status</div>
+                    <div><span class="status-pass">PASS</span></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-footer">
+            <a href="/" class="btn-back">← Logout / Go Back</a>
+        </div>
+    </div>
+
+
+
+</body>
+</html>

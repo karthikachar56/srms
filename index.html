@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .login-container {
+            background: #ffffff;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .login-header h2 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+
+        .login-header p {
+            color: #777;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            outline: none;
+        }
+
+        .form-group input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background-color: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+            margin-top: 10px;
+        }
+
+        .btn-submit:hover {
+            background-color: #5a67d8;
+        }
+
+        .error-message {
+            color: #e53e3e;
+            font-size: 12px;
+            margin-top: 5px;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="login-container">
+        <div class="login-header">
+            <h2>Student Portal</h2>
+            <p>Please enter your credentials to login</p>
+        </div>
+
+        <form id="loginForm" onsubmit="validateForm(event)">
+            <div class="form-group">
+                <label for="studentName">Student Name</label>
+                <input type="text" id="studentName" placeholder="Enter your full name">
+                <div class="error-message" id="nameError">Please enter your name</div>
+            </div>
+
+            <div class="form-group">
+                <label for="usn">USN (University Seat Number)</label>
+                <input type="text" id="usn" placeholder="e.g., 1XX20XX000" style="text-transform: uppercase;">
+                <div class="error-message" id="usnError">Please enter a valid USN</div>
+            </div>
+
+            <button type="submit" class="btn-submit">Login</button>
+        </form>
+    </div>
+
+    <script>
+        async function validateForm(event) {
+            event.preventDefault(); // Prevents page refresh
+
+            const studentName = document.getElementById('studentName').value.trim();
+            const usn = document.getElementById('usn').value.trim().toUpperCase();
+            
+            const nameError = document.getElementById('nameError');
+            const usnError = document.getElementById('usnError');
+            
+            let isValid = true;
+
+            // Name Validation
+            if (studentName === "") {
+                nameError.textContent = "Please enter your name";
+                nameError.style.display = "block";
+                isValid = false;
+            } else {
+                nameError.style.display = "none";
+            }
+
+            // USN Validation
+            if (usn === "") {
+                usnError.textContent = "Please enter a valid USN";
+                usnError.style.display = "block";
+                isValid = false;
+            } else {
+                usnError.style.display = "none";
+            }
+
+            if (isValid) {
+                try {
+                    const response = await fetch(`/api/records/${encodeURIComponent(usn)}/exists`);
+                    const result = await response.json();
+
+                    if (response.ok && result.exists) {
+                        alert(`Login Successful!\nWelcome, ${result.name} (${usn})`);
+                        window.location.href = `/result?usn=${encodeURIComponent(usn)}`;
+                    } else {
+                        usnError.textContent = "USN not registered in the system.";
+                        usnError.style.display = "block";
+                    }
+                } catch (err) {
+                    usnError.textContent = "Error connecting to validation service.";
+                    usnError.style.display = "block";
+                }
+            }
+
+            return isValid;
+        }
+    </script>
+
+</body>
+</html>
