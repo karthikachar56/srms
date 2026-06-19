@@ -39,32 +39,41 @@ def load_db():
         }
     }
     
-    if records_collection is None:
-        return default_data
-        
-    try:
-        cursor = records_collection.find({})
-        db_data = {}
-        for doc in cursor:
-            usn = doc["_id"]
-            db_data[usn] = {
-                "name": doc["name"],
-                "marks": doc["marks"]
-            }
-        
-        # If collection is empty, seed it with the default record
-        if not db_data:
-            records_collection.insert_one({
-                "_id": "1SP25CS001",
-                "name": "Karthik D",
-                "marks": default_data["1SP25CS001"]["marks"]
-            })
-            return default_data
+    # 1. Try loading from MongoDB Collection
+    if records_collection is not None:
+        try:
+            cursor = records_collection.find({})
+            db_data = {}
+            for doc in cursor:
+                usn = doc["_id"]
+                db_data[usn] = {
+                    "name": doc["name"],
+                    "marks": doc["marks"]
+                }
             
-        return db_data
-    except Exception as e:
-        print(f"MongoDB Load Error: {e}")
-        return default_data
+            # Seed collection if first successful connect
+            if not db_data:
+                records_collection.insert_one({
+                    "_id": "1SP25CS001",
+                    "name": "Karthik D",
+                    "marks": default_data["1SP25CS001"]["marks"]
+                })
+                return default_data
+                
+            return db_data
+        except Exception as e:
+            print(f"MongoDB Load failed, falling back to local file: {e}")
+
+    # 2. Fallback to local database.json file
+    LOCAL_DB = os.path.join(BASE_DIR, 'database.json')
+    if os.path.exists(LOCAL_DB):
+        try:
+            with open(LOCAL_DB, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception as file_err:
+            print(f"Failed to read local fallback database: {file_err}")
+            
+    return default_data
 
 # 1. Routes to serve Main Pages
 @app.route('/')
@@ -109,27 +118,47 @@ def save_record():
         return jsonify({"success": False, "message": "USN and Name are required fields."}), 400
         
     usn_clean = usn.strip().upper()
-    
-    if records_collection is None:
-        return jsonify({"success": False, "message": "Database connection is uninitialized."}), 500
-        
+    clean_marks = {}
+    if marks:
+        for sub, val in marks.items():
+            clean_marks[sub] = int(val)
+            
+    # 1. Try saving to MongoDB Collection
+    if records_collection is not None:
+        try:
+            records_collection.update_one(
+                {"_id": usn_clean},
+                {"$set": {"name": name, "marks": clean_marks}},
+                upsert=True
+            )
+            return jsonify({"success": True, "message": f"Record for {usn_clean} updated successfully in MongoDB!"})
+        except Exception as e:
+            print(f"MongoDB save failed, falling back to local file: {e}")
+            
+    # 2. Fallback to local database.json file
     try:
-        # Convert mark values to integers to guarantee metrics safety
-        clean_marks = {}
-        if marks:
-            for sub, val in marks.items():
-                clean_marks[sub] = int(val)
-                
-        records_collection.update_one(
-            {"_id": usn_clean},
-            {"$set": {"name": name, "marks": clean_marks}},
-            upsert=True
-        )
-        return jsonify({"success": True, "message": f"Record for {usn_clean} updated successfully in MongoDB!"})
-    except Exception as e:
+        LOCAL_DB = os.path.join(BASE_DIR, 'database.json')
+        local_db_data = {}
+        if os.path.exists(LOCAL_DB):
+            with open(LOCAL_DB, 'r', encoding='utf-8') as f:
+                local_db_data = json.load(f)
+        
+        local_db_data[usn_clean] = {
+            "name": name,
+            "marks": clean_marks
+        }
+        
+        with open(LOCAL_DB, 'w', encoding='utf-8') as f:
+            json.dump(local_db_data, f, indent=4)
+            
         return jsonify({
-            "success": False, 
-            "message": f"Failed to save record to MongoDB. Error: {str(e)}"
+            "success": True,
+            "message": f"Record for {usn_clean} saved successfully locally (Fallback: MongoDB is offline/unreachable)."
+        })
+    except Exception as file_err:
+        return jsonify({
+            "success": False,
+            "message": f"Failed to save record: MongoDB is unreachable AND local file save failed. Details: {str(file_err)}"
         }), 500
 
 # 5. API Route to delete student records
@@ -137,18 +166,33 @@ def save_record():
 def delete_record(usn):
     usn_clean = usn.strip().upper()
     
-    if records_collection is None:
-        return jsonify({"success": False, "message": "Database connection is uninitialized."}), 500
-        
+    # 1. Try deleting from MongoDB Collection
+    if records_collection is not None:
+        try:
+            result = records_collection.delete_one({"_id": usn_clean})
+            if result.deleted_count > 0:
+                return jsonify({"success": True, "message": f"Record {usn_clean} deleted from MongoDB."})
+            # If not found in MongoDB, we check if it is in the local fallback file before returning 404
+        except Exception as e:
+            print(f"MongoDB delete failed, falling back to local file: {e}")
+            
+    # 2. Fallback to local database.json file
     try:
-        result = records_collection.delete_one({"_id": usn_clean})
-        if result.deleted_count > 0:
-            return jsonify({"success": True, "message": f"Record {usn_clean} deleted from MongoDB."})
-        return jsonify({"success": False, "message": "Record not found."}), 404
-    except Exception as e:
+        LOCAL_DB = os.path.join(BASE_DIR, 'database.json')
+        if os.path.exists(LOCAL_DB):
+            with open(LOCAL_DB, 'r', encoding='utf-8') as f:
+                local_db_data = json.load(f)
+                
+            if usn_clean in local_db_data:
+                del local_db_data[usn_clean]
+                with open(LOCAL_DB, 'w', encoding='utf-8') as f:
+                    json.dump(local_db_data, f, indent=4)
+                return jsonify({"success": True, "message": f"Record {usn_clean} deleted locally."})
+        return jsonify({"success": False, "message": "Record not found locally or on MongoDB."}), 404
+    except Exception as file_err:
         return jsonify({
-            "success": False, 
-            "message": f"Failed to delete record from MongoDB. Error: {str(e)}"
+            "success": False,
+            "message": f"Failed to delete record: MongoDB failed AND local file delete failed. Details: {str(file_err)}"
         }), 500
 
 # 6. API Route for Secure Admin Login
