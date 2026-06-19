@@ -3,7 +3,14 @@ import json
 import os
 
 app = Flask(__name__)
-DB_FILE = 'database.json'
+
+# Serverless path resolution
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_FILE = os.path.join(BASE_DIR, 'database.json')
+INDEX_FILE = os.path.join(BASE_DIR, 'index.html')
+ADMIN_LOGIN_FILE = os.path.join(BASE_DIR, 'admin login.html')
+ADMIN_PANEL_FILE = os.path.join(BASE_DIR, 'admin panel.html')
+RESULT_SHEET_FILE = os.path.join(BASE_DIR, 'result sheet.html')
 
 # Helper function to load database
 def load_db():
@@ -21,31 +28,50 @@ def load_db():
                 }
             }
         }
-        with open(DB_FILE, 'w') as f:
-            json.dump(default_data, f, indent=4)
-    with open(DB_FILE, 'r') as f:
-        return json.load(f)
+        try:
+            with open(DB_FILE, 'w', encoding='utf-8') as f:
+                json.dump(default_data, f, indent=4)
+        except Exception as e:
+            # Fallback to returning default data if write fails (e.g. read-only filesystem on Vercel)
+            return default_data
+    try:
+        with open(DB_FILE, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except Exception:
+        # Emergency fallback database if reading fails or file is corrupted
+        return {
+            "1SP25CS001": {
+                "name": "Karthik D",
+                "marks": {
+                    "Mathematics": 88,
+                    "Data Structures": 92,
+                    "OOPs (Java)": 85,
+                    "Computer Arch.": 79,
+                    "Basic Electrical": 90
+                }
+            }
+        }
 
 # Helper function to save database
 def save_db(data):
-    with open(DB_FILE, 'w') as f:
+    with open(DB_FILE, 'w', encoding='utf-8') as f:
         json.dump(data, f, indent=4)
 
 # 1. Routes to serve Main Pages
 @app.route('/')
 @app.route('/login')
 def student_login():
-    with open('index.html', 'r', encoding='utf-8') as f:
+    with open(INDEX_FILE, 'r', encoding='utf-8') as f:
         return f.read()
 
 @app.route('/admin-login')
 def admin_login_page():
-    with open('admin login.html', 'r', encoding='utf-8') as f:
+    with open(ADMIN_LOGIN_FILE, 'r', encoding='utf-8') as f:
         return f.read()
 
 @app.route('/admin')
 def admin_panel():
-    with open('admin panel.html', 'r', encoding='utf-8') as f:
+    with open(ADMIN_PANEL_FILE, 'r', encoding='utf-8') as f:
         return f.read()
 
 # 2. API Route to get all active records (for loading table on startup)
@@ -65,18 +91,28 @@ def check_student_exists(usn):
 # 4. API Route to save or update student records
 @app.route('/api/records', methods=['POST'])
 def save_record():
-    data = request.json
+    data = request.json or {}
     usn = data.get('usn')
     name = data.get('name')
     marks = data.get('marks')
     
+    if not usn or not name:
+        return jsonify({"success": False, "message": "USN and Name are required fields."}), 400
+        
     db = load_db()
     db[usn] = {
         "name": name,
         "marks": marks
     }
-    save_db(db)
-    return jsonify({"success": True, "message": f"Record for {usn} updated successfully!"})
+    
+    try:
+        save_db(db)
+        return jsonify({"success": True, "message": f"Record for {usn} updated successfully!"})
+    except Exception as e:
+        return jsonify({
+            "success": False, 
+            "message": f"Database is read-only (Vercel Serverless environment). Local updates are not persistent. Error: {str(e)}"
+        }), 500
 
 # 5. API Route to delete student records
 @app.route('/api/records/<usn>', methods=['DELETE'])
@@ -84,8 +120,14 @@ def delete_record(usn):
     db = load_db()
     if usn in db:
         del db[usn]
-        save_db(db)
-        return jsonify({"success": True, "message": f"Record {usn} deleted."})
+        try:
+            save_db(db)
+            return jsonify({"success": True, "message": f"Record {usn} deleted."})
+        except Exception as e:
+            return jsonify({
+                "success": False, 
+                "message": f"Database is read-only (Vercel Serverless environment). Deletion failed. Error: {str(e)}"
+            }), 500
     return jsonify({"success": False, "message": "Record not found."}), 404
 
 # 6. API Route for Secure Admin Login
@@ -199,7 +241,7 @@ def result_sheet():
         """
 
     # Read original result sheet markup and inject values natively using Python template processing
-    with open('result sheet.html', 'r', encoding='utf-8') as f:
+    with open(RESULT_SHEET_FILE, 'r', encoding='utf-8') as f:
         html_content = f.read()
     
     # Modify the HTML script block handling so it displays the fetched data seamlessly
