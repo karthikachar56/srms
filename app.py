@@ -149,7 +149,15 @@ def save_record():
     clean_marks = {}
     if marks:
         for sub, val in marks.items():
-            clean_marks[sub] = int(val)
+            if sub and sub.strip():
+                if val is not None and str(val).strip() != "":
+                    try:
+                        clean_marks[sub] = int(val)
+                    except (ValueError, TypeError):
+                        clean_marks[sub] = 0
+                else:
+                    clean_marks[sub] = 0
+            
             
     # 1. Try saving to internal DB server
     try:
