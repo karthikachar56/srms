@@ -1,6 +1,7 @@
 from flask import Flask, request, jsonify, render_template_string, redirect, url_for
 import json
 import os
+import certifi
 from pymongo import MongoClient
 
 app = Flask(__name__)
@@ -13,10 +14,10 @@ ADMIN_PANEL_FILE = os.path.join(BASE_DIR, 'admin panel.html')
 RESULT_SHEET_FILE = os.path.join(BASE_DIR, 'result sheet.html')
 
 # MongoDB Connection Initialization
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://achark659_db:achark659_db@cluster0.qqxk8gr.mongodb.net/")
+MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://123:123@cluster0.qqxk8gr.mongodb.net/")
 try:
-    # Set tlsAllowInvalidCertificates=True to bypass local SSL/TLS certificate scanning errors
-    mongo_client = MongoClient(MONGO_URI, tlsAllowInvalidCertificates=True, serverSelectionTimeoutMS=5000)
+    # Use certifi to provide CA certificates for serverless environments (fixes TLSV1_ALERT_INTERNAL_ERROR)
+    mongo_client = MongoClient(MONGO_URI, tlsCAFile=certifi.where(), serverSelectionTimeoutMS=5000)
     db_mongo = mongo_client["srms_db"]
     records_collection = db_mongo["student_records"]
 except Exception as e:
